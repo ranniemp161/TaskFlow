@@ -10,8 +10,19 @@ async function proxy(request: Request, context: Context) {
   if (!allowed) return Response.json({ message: "Not found" }, { status: 404 });
   const source = new URL(request.url);
   if (request.method !== "GET") {
+    // Compare against the Host header, not request.url: the standalone server
+    // builds request.url from its bind address (e.g. http://0.0.0.0:3000), so
+    // behind a reverse proxy it never matches the browser's origin. Browsers
+    // cannot forge Host on cross-site requests; NGINX must forward $http_host.
     const origin = request.headers.get("origin");
-    if (origin && origin !== source.origin) {
+    const host = request.headers.get("host");
+    let originHost: string | null = null;
+    try {
+      originHost = origin ? new URL(origin).host : null;
+    } catch {
+      originHost = null;
+    }
+    if (origin && (!host || originHost !== host)) {
       return Response.json(
         { message: "Invalid request origin" },
         { status: 403 },
